@@ -120,7 +120,9 @@ GH.genMap = function (seed, era, loc) {
 
   // ---- BSP building ----
   // Builds a walled building in rect (bx,by,bw,bh); returns list of rooms
-  function building(bx, by, bw, bh, extTex, roomTypes, corridor, maxRoom) {
+  map.buildings = [];
+  function building(bx, by, bw, bh, extTex, roomTypes, corridor, maxRoom, kind) {
+    map.buildings.push({ x: bx, y: by, w: bw, h: bh, ext: extTex, kind: kind || 'house' });
     for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) { map.cells[I(x, y)] = extTex; map.outdoor[I(x, y)] = 0; map.ceil[I(x, y)] = 40; }
     const ix = bx + 1, iy = by + 1, iw = bw - 2, ih = bh - 2;
     for (let y = iy; y < iy + ih; y++) for (let x = ix; x < ix + iw; x++) map.cells[I(x, y)] = 0;
@@ -273,12 +275,12 @@ GH.genMap = function (seed, era, loc) {
   if (loc === 'castle') {
     // the keep: corridors, great hall, throne room, dungeon cells…
     const kw = w - 14, kh = 24;
-    mainRooms = building(7, 3, kw, kh, 14, LOC_ROOMS.castle, true, 8);
+    mainRooms = building(7, 3, kw, kh, 14, LOC_ROOMS.castle, true, 8, 'keep');
     frontDoor = frontEntrance(7, 3, kw, kh); frontDoor.tex = 23;
-    const ch = building(3, 30, 12, 8, 14, ['chapel'], false, 10); doorOnSide(3, 30, 12, 8, 'e');
-    const ar = building(w - 15, 30, 12, 8, 14, ['armory', 'storage'], false, 6); doorOnSide(w - 15, 30, 12, 8, 'w');
-    const t1 = building(1, h - 7, 6, 6, 14, ['tower'], false, 6); doorOnSide(1, h - 7, 6, 6, 'n');
-    const t2 = building(w - 7, h - 7, 6, 6, 14, ['tower'], false, 6); doorOnSide(w - 7, h - 7, 6, 6, 'n');
+    const ch = building(3, 30, 12, 8, 14, ['chapel'], false, 10, 'house'); doorOnSide(3, 30, 12, 8, 'e');
+    const ar = building(w - 15, 30, 12, 8, 14, ['armory', 'storage'], false, 6, 'house'); doorOnSide(w - 15, 30, 12, 8, 'w');
+    const t1 = building(1, h - 7, 6, 6, 14, ['tower'], false, 6, 'tower'); doorOnSide(1, h - 7, 6, 6, 'n');
+    const t2 = building(w - 7, h - 7, 6, 6, 14, ['tower'], false, 6, 'tower'); doorOnSide(w - 7, h - 7, 6, 6, 'n');
     mainRooms.push(...ch, ...ar, ...t1, ...t2);
     // banners in the great hall and throne room
     for (const rm of mainRooms) if (rm.type === 'greathall' || rm.type === 'throne') for (const i of rm.cells) for (const d of [1, -1, w, -w]) if (map.cells[i + d] > 0 && map.doorAt[i + d] < 0 && r.chance(0.18)) map.cells[i + d] = 17;
@@ -289,6 +291,7 @@ GH.genMap = function (seed, era, loc) {
     for (let y = frontDoor.y + 1; y < h - 1; y++) map.floor[I(frontDoor.x, y)] = 37;
   } else if (loc === 'catacombs') {
     const mb = h - 10; // underground area: rows 1..mb
+    map.buildings.push({ x: 0, y: 0, w: w, h: mb + 2, ext: 11, kind: 'hill' });
     for (let y = 1; y <= mb + 1; y++) for (let x = 1; x < w - 1; x++) { const i = I(x, y); map.cells[i] = 11; map.outdoor[i] = 0; map.ceil[i] = 43; map.floor[i] = 34; }
     for (let y = 0; y <= mb + 1; y++) { map.cells[I(0, y)] = 11; map.cells[I(w - 1, y)] = 11; }
     for (let x = 0; x < w; x++) map.cells[I(x, 0)] = 11;
@@ -335,6 +338,7 @@ GH.genMap = function (seed, era, loc) {
     for (let y = mb + 2; y < h - 1; y++) map.floor[I(ex, y)] = 37;
   } else if (loc === 'church') {
     const bw = 22, bh = 26, bx = Math.floor(w / 2) - 11, by = 3;
+    map.buildings.push({ x: bx, y: by, w: bw, h: bh, ext: 14, kind: 'church', tower: { x: bx + bw - 6, y: by + 1, w: 5, h: 6 } });
     for (let y = by; y < by + bh; y++) for (let x = bx; x < bx + bw; x++) { const i = I(x, y); map.cells[i] = 14; map.outdoor[i] = 0; map.ceil[i] = 41; }
     for (let y = by + 1; y < by + bh - 1; y++) for (let x = bx + 1; x < bx + bw - 1; x++) map.cells[I(x, y)] = 0;
     const iw = 13, cx = bx + Math.floor(bw / 2);
@@ -356,21 +360,21 @@ GH.genMap = function (seed, era, loc) {
     // pews either side of the aisle
     for (let y = by + 10; y < by + bh - 4; y += 2) for (const x of [bx + 7, bx + 8, cx + 2, cx + 3]) map._extra.push([x, y, 'pew', mainRooms[3].id]);
     frontDoor = addDoor(cx, by + bh - 1, 22, true); map.roomId[I(cx, by + bh - 1)] = -1;
-    const hut = building(3, h - 13, 9, 7, 12, ['hut'], false, 8); doorOnSide(3, h - 13, 9, 7, 'n');
-    const mz = building(w - 12, h - 13, 9, 7, 14, ['tomb'], false, 8); doorOnSide(w - 12, h - 13, 9, 7, 'n');
+    const hut = building(3, h - 13, 9, 7, 12, ['hut'], false, 8, 'barn'); doorOnSide(3, h - 13, 9, 7, 'n');
+    const mz = building(w - 12, h - 13, 9, 7, 14, ['tomb'], false, 8, 'mausoleum'); doorOnSide(w - 12, h - 13, 9, 7, 'n');
     mainRooms.push(...hut, ...mz);
     spawn = { x: cx + 0.5, y: by + bh + 4.5, a: -Math.PI / 2 };
     vanPos = { x: cx + 3.5, y: by + bh + 6.5 };
     for (let y = by + bh; y < h - 1; y++) map.floor[I(cx, y)] = 37;
   } else if (loc === 'farm') {
     const hb = { x: 4, y: 4, w: r.int(15, 18), h: r.int(12, 14) };
-    mainRooms = building(hb.x, hb.y, hb.w, hb.h, theme.ext, LOC_ROOMS.farmhouse, false, 6);
+    mainRooms = building(hb.x, hb.y, hb.w, hb.h, theme.ext, LOC_ROOMS.farmhouse, false, 6, 'house');
     frontDoor = frontEntrance(hb.x, hb.y, hb.w, hb.h);
     const bb = { x: w - 18, y: 5, w: 13, h: 11 };
-    const barn = building(bb.x, bb.y, bb.w, bb.h, theme.rooms.barn[0], ['barn', 'barn', 'shed'], false, 9);
+    const barn = building(bb.x, bb.y, bb.w, bb.h, theme.rooms.barn[0], ['barn', 'barn', 'shed'], false, 9, 'barn');
     const bd = frontEntrance(bb.x, bb.y, bb.w, bb.h); bd.tex = 23;
     const sb = { x: w - 14, y: h - 15, w: 8, h: 7 };
-    const shed = building(sb.x, sb.y, sb.w, sb.h, theme.rooms.shed[0], ['shed'], false, 6);
+    const shed = building(sb.x, sb.y, sb.w, sb.h, theme.rooms.shed[0], ['shed'], false, 6, 'barn');
     const sd = frontEntrance(sb.x, sb.y, sb.w, sb.h); sd.tex = 23;
     mainRooms.push(...barn, ...shed);
     spawn = { x: frontDoor.x + 0.5, y: frontDoor.y + 5.5, a: -Math.PI / 2 };
@@ -381,7 +385,7 @@ GH.genMap = function (seed, era, loc) {
     const B = { house: [22, 18, 6], hospital: [40, 28, 8], school: [38, 26, 9] }[loc];
     const bw = B[0] + r.int(-2, 2), bh = B[1] + r.int(-2, 1);
     const bx = Math.floor((w - bw) / 2), by = 2;
-    mainRooms = building(bx, by, bw, bh, theme.ext, LOC_ROOMS[loc], loc !== 'house', B[2]);
+    mainRooms = building(bx, by, bw, bh, theme.ext, LOC_ROOMS[loc], loc !== 'house', B[2], loc === 'house' ? 'house' : 'big');
     frontDoor = frontEntrance(bx, by, bw, bh);
     spawn = { x: frontDoor.x + 0.5, y: frontDoor.y + 3.5, a: -Math.PI / 2 };
     vanPos = { x: frontDoor.x + 0.5 + (r.chance(0.5) ? 3 : -3), y: frontDoor.y + 5.5 };
@@ -442,6 +446,7 @@ GH.genMap = function (seed, era, loc) {
   const vi = I(Math.floor(vanPos.x), Math.floor(vanPos.y));
   map.vanObj = addObj({ kind: 'van', spr: era === 'modern' ? 'van' : 'cart', x: vanPos.x, y: vanPos.y, rad: 0.7, block: true, room: 0, sh: 0.9, cell: vi }).id;
   map.blockObj[vi] = map.vanObj;
+  for (const d of [-w, w]) if (map.cells[vi + d] === 0 && map.outdoor[vi + d] && map.blockObj[vi + d] < 0) map.blockObj[vi + d] = map.vanObj;
   const ei = I(Math.floor(vanPos.x) + (vanPos.x > spawn.x ? -1 : 1), Math.floor(vanPos.y));
   map.equipObj = addObj({ kind: 'equip', spr: era === 'modern' ? 'equip' : 'chest', x: (ei % w) + 0.5, y: ((ei / w) | 0) + 0.5, rad: 0.35, block: true, room: 0, sh: 0.55, cell: ei }).id;
   map.blockObj[ei] = map.equipObj;
@@ -521,6 +526,7 @@ GH.genMap = function (seed, era, loc) {
   for (const o of map.objects) if (o.block && o.cell !== undefined) map.blockObj[o.cell] = o.id;
   for (const l of map.lights) if (l.obj >= 0) l.obj = remap[l.obj];
   map.vanObj = remap[map.vanObj]; map.equipObj = remap[map.equipObj];
+  { const vo = map.objects[map.vanObj]; if (vo) for (const d of [-w, w]) { const j = vo.cell + d; if (map.cells[j] === 0 && map.outdoor[j] && map.blockObj[j] < 0) map.blockObj[j] = vo.id; } }
 
   // ---- light coverage precompute ----
   GH.precomputeLights(map);

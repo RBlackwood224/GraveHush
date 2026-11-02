@@ -4,7 +4,7 @@
 
 ### ▶ [PLAY NOW](https://rblackwood224.github.io/GraveHush/)
 
-A first-person pixel-art ghost hunting horror game in the browser. Solo or online co-op for up to 4 players, with proximity voice chat. The ghost hears your microphone.
+A first-person 3D pixel-art ghost hunting horror game in the browser. Solo or online co-op for up to 4 players, with proximity voice chat. The ghost hears your microphone.
 
 ![Modern](screenshots/modern.png)
 ![Medieval](screenshots/medieval.png)
@@ -51,7 +51,7 @@ Rare scripted scares can happen once per mission: a figure crossing the corridor
 Modern and medieval: house / manor, asylum / infirmary, school / abbey, farm.
 Medieval only: **castle** (keep, throne room, armory, dungeon cells, courtyard with towers), **catacombs** (an underground labyrinth with ossuaries, tombs and iron gates — you can hide in a sarcophagus) and **church & graveyard** (nave with pews, sanctuary, sacristy, bell tower, gravedigger's hut, mausoleum).
 
-![Castle](screenshots/castle.png)
+![Ghost](screenshots/castle.png)
 ![Catacombs](screenshots/catacombs.png)
 
 ### Eras
@@ -103,7 +103,7 @@ Every player can use their own language (English, French, Hungarian) in the same
 
 ## Tech
 
-Plain HTML, CSS and JavaScript with a canvas raycaster. All textures, sprites and sounds are generated in code. Online play uses [PeerJS](https://peerjs.com/) (WebRTC, peer to peer).
+Plain HTML, CSS and JavaScript with its own WebGL2 3D engine (real buildings with roofs, windows and doors, voxel furniture and items, low-resolution dithered pixel look). Older devices without WebGL2 fall back to a classic raycaster. All textures, models and sounds are generated in code. Online play uses [PeerJS](https://peerjs.com/) (WebRTC, peer to peer).
 
 ---
 

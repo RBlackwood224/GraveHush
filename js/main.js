@@ -4,7 +4,7 @@
 (function () {
   const G = GH.game = {};
   const t = GH.t, UI = GH.UI;
-  let R, A, IN, V, NET;
+  let R, A, IN, V, NET, G3 = null;
   G.state = 'menu'; G.role = 'solo'; G.myId = 'h'; G.world = null; G.roster = []; G.code = '';
   G.journal = { ev: {}, origin: null };
   let pitch = 0, bobT = 0, stamina = 3, lightFail = 0, jumpT = 0, jumpForm = 'shadow', flashT = 0, huntOn = false, lastA = 0;
@@ -20,7 +20,8 @@
 
   G.init = function () {
     const canvas = document.getElementById('view');
-    R = G.R = new GH.Renderer(canvas);
+    try { if (location.search.includes('nogl')) throw new Error('forced classic'); G3 = G.G3 = new GH.GL3D(canvas); R = G.R = new GH.Renderer(document.createElement('canvas')); }
+    catch (e) { console.warn('WebGL2 unavailable, using the classic renderer', e); G3 = null; R = G.R = new GH.Renderer(canvas); }
     A = GH.audio = new GH.Audio();
     IN = GH.input = new GH.Input(canvas);
     V = G.V = new GH.Voice(A);
@@ -384,7 +385,7 @@
 
     // ----- look & move -----
     const canAct = !overlay && jumpT <= 0;
-    if (canAct) { me.a += inp.lookX; pitch = GH.clamp(pitch - inp.lookY, -55, 55); }
+    if (canAct) { me.a += inp.lookX; pitch = GH.clamp(pitch - inp.lookY, G3 ? -150 : -55, G3 ? 150 : 55); }
     let moving = 0;
     if (canAct && me.hiding < 0) {
       const running = inp.run && stamina > 0.2 && !me.dead;
@@ -402,6 +403,7 @@
 
     // ----- buttons -----
     const tg = canAct && !me.dead ? findTarget(W, me) : null;
+    G.target = tg;
     let ptxt = canAct && tg ? (GH.isTouch ? '' : '[E] ') + promptFor(W, tg) : '';
     if (!ptxt && canAct) { for (const id in W.players) { const q = W.players[id]; if (id === G.myId || (q.dead && !me.dead) || q.hiding >= 0) continue; const d = GH.dist(me.x, me.y, q.x, q.y); if (d < 7 && Math.abs(GH.angDiff(me.a, Math.atan2(q.y - me.y, q.x - me.x))) < 0.12 && GH.los(W.map, me.x, me.y, q.x, q.y, W.blockSight)) { ptxt = q.name; break; } } }
     UI.prompt(ptxt);
@@ -545,6 +547,7 @@
     }
     for (const o of W.objs) { if (!o) continue; if ((o.kind === 'item' && o.it === 'candle') || (o.kind === 'deco' && o.spr === 'candles')) dyn.push({ x: o.x, y: o.y, rad: 2.5, col: [1, 0.65, 0.35], pow: 0.55 }); }
     R.buildLightmap(W.map, W.time, dyn, false);
+    if (G3) { renderView3D(W, me, dev, bob, lensUse, dt, held); return; }
     // sprites
     const spr = [];
     const uv = held && held.uv;
@@ -716,6 +719,166 @@
     me.fear = Math.min(100, me.fear + fear);
   }
 
+  // ---------------- 3D view ----------------
+  function dynWorld(M, W, me) {
+    const map = W.map, era = W.era, t = W.time;
+    const tg = G.target;
+    const pulse = 0.18 + 0.12 * Math.sin(t * 6);
+    // doors
+    for (const d of map.doors) {
+      if (d.dead) continue;
+      const ang = d.open * 1.65;
+      let hx, hz, th;
+      if (d.axis === 'h') { hx = d.x + 0.02; hz = d.y + 0.5; th = -ang; } else { hx = d.x + 0.5; hz = d.y + 0.02; th = Math.PI / 2 + ang; }
+      const dir = [Math.cos(th), Math.sin(th)];
+      const B = G3.basisF(-dir[1], dir[0]);
+      const c = [hx + dir[0] * 0.48, 1.05, hz + dir[1] * 0.48];
+      const hi = tg && tg.type === 'door' && tg.i === d.i ? pulse : 0;
+      G3.box(M, c, B, 0.47, 1.04, 0.035, [1, 1, 1], d.tex, hi, 0);
+      for (const s of [-1, 1]) G3.box(M, [hx + dir[0] * 0.86 + B[2][0] * 0.05 * s, 1.0, hz + dir[1] * 0.86 + B[2][2] * 0.05 * s], B, 0.05, 0.02, 0.02, [0.85, 0.68, 0.3], 50, 0.1, 1);
+    }
+    // lamps and torches
+    for (const o of W.objs) {
+      if (!o || o.kind !== 'lamp') continue;
+      const L = map.lights[o.light]; if (!L) continue;
+      const lit = L.on && !L.broken && !(L.flicker > 0 && Math.sin(t * 37 + L.id) < 0.2);
+      const hi = tg && tg.type === 'lamp' && tg.l === o.light ? pulse : 0;
+      if (L.kind === 'lamp') {
+        G3.box(M, [o.x, 2.55, o.y], G3.basisF(0, 1), 0.01, 0.15, 0.01, [0.1, 0.1, 0.1], 50, 0, 1);
+        G3.box(M, [o.x, 2.36, o.y], G3.basisF(0, 1), 0.07, 0.05, 0.07, [0.3, 0.3, 0.3], 59, hi, 1);
+        G3.box(M, [o.x, 2.28, o.y], G3.basisF(0, 1), 0.05, 0.05, 0.05, lit ? [1, 0.95, 0.7] : [0.4, 0.4, 0.38], 50, lit ? 2.2 : hi, 1);
+      } else {
+        const cx = Math.floor(o.x) + 0.5, cy = Math.floor(o.y) + 0.5;
+        const fx = o.x - cx, fz = o.y - cy; const l = Math.hypot(fx, fz) || 1;
+        const wx = cx + fx / l * 0.47, wz = cy + fz / l * 0.47;
+        const B = G3.basisF(-fx / l, -fz / l);
+        G3.box(M, [wx, 1.55, wz], B, 0.06, 0.08, 0.04, [0.2, 0.2, 0.22], 59, hi, 1);
+        G3.box(M, [wx - fx / l * 0.08, 1.7, wz - fz / l * 0.08], B, 0.03, 0.2, 0.03, [0.35, 0.24, 0.15], 51, hi, 1);
+        if (lit) { const fl = 0.85 + 0.3 * Math.sin(t * 13 + L.id * 3) * Math.sin(t * 7.1 + L.id); G3.box(M, [wx - fx / l * 0.08, 1.95, wz - fz / l * 0.08], B, 0.055, 0.09 * fl, 0.055, [1, 0.55, 0.15], 50, 2.2, 1); G3.box(M, [wx - fx / l * 0.08, 1.98, wz - fz / l * 0.08], B, 0.03, 0.08 * fl, 0.03, [1, 0.9, 0.5], 50, 2.6, 1); }
+      }
+    }
+    // hiding places (can glow), items, clues, bones…
+    const uv = me && G.heldUV;
+    for (const o of W.objs) {
+      if (!o || o.kind === 'gone') continue;
+      const isT = tg && tg.o === o.id && ['hide', 'pick', 'read', 'bones', 'deco'].includes(tg.type);
+      const hi = isT ? pulse : 0;
+      if (o.kind === 'furn' && o.hide) { G3.drawFurn(M, map, o, hi); continue; }
+      const rot = ((o.id * 2654435761) >>> 0) / 4294967296 * Math.PI * 2;
+      const B = G3.basisF(Math.cos(rot), Math.sin(rot));
+      const pos = [o.x, 0.002, o.y];
+      const draw = (name, scale, state) => { const fn = G3.ITEM[name]; if (!fn) return; const a = G3.modelAdder(M, pos, B, scale); fn(hi ? (x, y, z, w, h, d, c, tt, e, u) => a(x, y, z, w, h, d, c, tt, (e || 0) + hi * 2, u) : a, state || {}); };
+      if (o.kind === 'item') {
+        if (o.it === 'ash') draw('ash_pile', 1.3, { prints: o.spr === 'ashprint' });
+        else draw(o.it, 1.35, { on: o.on || o.spr === 'motionon' || o.spr === 'threadon', written: o.spr === 'written', blue: false });
+        if (o.it === 'candle') draw('candle', 1.35, { on: 1 });
+      } else if (o.kind === 'clue') draw(o.spr === 'toy' ? 'toy' : o.spr === 'photo' ? 'photo' : 'note', 1.3);
+      else if (o.kind === 'throw') draw(o.spr, 1.2);
+      else if (o.kind === 'bones') draw(o.spr === 'ashbones' ? 'ashbones' : 'bones', 0.9);
+      else if (o.kind === 'salt') draw('salt_pile', 1.2, { prints: o.spr === 'saltprint' });
+      else if (o.kind === 'body') { const sl = +(o.spr.split('_')[2] || 0); G3.figure(M, o.x, o.y, rot, sl, era, 0, { lying: true, blood: true }); }
+      else if (o.kind === 'deco') { const lit = o.spr === 'candles'; for (const [dx, dz, hh] of [[-0.12, 0, 0.22], [0.02, 0.08, 0.3], [0.13, -0.05, 0.18]]) { G3.box(M, [o.x + dx, (o.z ? 0.62 : 0) + hh / 2, o.y + dz], B, 0.025, hh / 2, 0.025, [0.9, 0.85, 0.7], 50, hi, 1); if (lit) G3.box(M, [o.x + dx, (o.z ? 0.62 : 0) + hh + 0.03, o.y + dz], B, 0.015, 0.03, 0.015, [1, 0.65, 0.2], 50, 2.4, 1); } }
+    }
+    if (!me) return;
+    // other players
+    for (const id in W.players) {
+      const p = W.players[id]; if (id === G.myId || p.hiding >= 0) continue;
+      if (p.dead && !me.dead) continue;
+      if (p.lx2 === undefined) { p.lx2 = p.x; p.ly2 = p.y; p.ph = 0; }
+      const mv = GH.dist(p.lx2, p.ly2, p.x, p.y); p.ph += mv * 5; p.lx2 = p.x; p.ly2 = p.y;
+      G3.figure(M, p.x, p.y, p.a, p.slot, era, mv > 0.001 ? p.ph : 0, { light: p.light && !p.dead, emit: p.dead ? 0.3 : 0 });
+    }
+    // the ghost wearing a friend's body
+    const gp = W.ghostPub;
+    if (gp.mimic >= 0 && gp.vis > 0.3 && Math.random() < gp.vis) G3.figure(M, gp.x, gp.y, Math.atan2(me.y - gp.y, me.x - gp.x), gp.mimic, era, 0, {});
+    // orbs
+    if (G.orbs) for (const ob of G.orbs) G3.box(M, [ob[0], ob[1], ob[2]], G3.basisF(0, 1), 0.025, 0.025, 0.025, [0.85, 1, 0.85], 50, 3, 1);
+  }
+
+  function renderView3D(W, me, dev, bob, lensUse, dt, held) {
+    const sel = me.inv[me.sel];
+    const gp = W.ghostPub;
+    const era = W.era;
+    G.heldUV = !!(held && held.uv);
+    const sprites = [];
+    if (G.heldUV && !me.dead) for (const o of W.objs) if (o && o.kind === 'print') sprites.push({ x: o.x, z: o.y, y0: 0.75 + (o.z || 0.4) * 0.7, h: 0.22, name: 'hand', mode: 'bright' });
+    const gvis = me.dead ? Math.max(0.45, gp.vis) : gp.vis;
+    if (gvis > 0.02 && gp.x > 0 && gp.mimic < 0) sprites.push({ x: gp.x, z: gp.y, y0: 0.02 + Math.sin(W.time * 2) * 0.03, h: gp.form === 'hanged' ? 2.05 : 1.85, name: 'g_' + gp.form, alpha: Math.min(1, gvis) * 0.92, glitch: gp.glitch + (gp.hunt ? 0.5 : 0), mode: 'ghost' });
+    for (const sc of scares) if (sc.vis) sprites.push({ x: sc.x, z: sc.y, h: 1.85, name: 'g_' + sc.form, alpha: 0.95, glitch: 0.25, mode: 'ghost' });
+    for (const h of halluc) sprites.push({ x: h.x, z: h.y, h: 1.85, name: 'g_shadow', alpha: 0.6, glitch: 0.8, mode: 'ghost' });
+    const lensEv = gp.ev && (gp.ev.includes('lens') || gp.fake === 'lens');
+    const nightVision = lensUse && sel.it === 'camera';
+    G.orbs = null;
+    if (nightVision && lensEv && (dev.room === gp.room || GH.dist(me.x, me.y, gp.x, gp.y) < 4)) {
+      const rm = W.map.rooms[gp.room]; G.orbs = [];
+      for (let k = 0; k < 4; k++) { const a = W.time * (0.3 + k * 0.17) + k * 2; G.orbs.push([(rm ? rm.cx : gp.x) + Math.cos(a) * (0.8 + k * 0.4), 1.0 + Math.sin(a * 2) * 0.5, (rm ? rm.cy : gp.y) + Math.sin(a * 1.3) * (0.8 + k * 0.3)]); }
+    }
+    // camera, including the fall when you die
+    let eye = GH.EYE + bob * 2.5, pv = pitch * 0.0075, roll = 0, yaw = me.a;
+    const de = jumpT > 0 ? DEATH - jumpT : -1;
+    if (de > 0.2 && de < 1.45) yaw += (Math.random() - 0.5) * 0.05;
+    if (de > 1.45) { const f = Math.min(1, (de - 1.45) / 0.5); eye = GH.EYE - 1.4 * f * f; pv += 1.0 * f; roll = 0.7 * f; }
+    if (me.dead && jumpT <= 0) eye = 1.75;
+    R.clearTransparent();
+    const showHands = !me.dead && me.hiding < 0 && !nightVision && jumpT <= 0 && !(lensUse && sel && sel.it === 'mirror');
+    const L = R.getLM();
+    const fx = { fear: me.dead ? 0.2 : me.fear / 100, nightVision, dead: me.dead && jumpT <= 0, hiding: me.hiding >= 0, flash: flashT * 3 };
+    const gd = GH.dist(me.x, me.y, gp.x, gp.y);
+    fx.glitch = (gp.vis > 0.2 && gd < 7 ? (1 - gd / 7) * 0.8 : 0) + (huntOn && gd < 9 ? 0.25 : 0);
+    fx.redPulse = huntOn && gd < 6 ? (0.5 + 0.5 * Math.sin(W.time * 8)) * (1 - gd / 6) : 0;
+    for (const sc of scares) if (sc.flash > 0) { fx.glitch += sc.flash * 3; fx.flash = Math.max(fx.flash, sc.flash * 0.6); }
+    G3.render({
+      map: W.map, x: me.x, y: me.y, a: yaw, pitch: pv, eye, roll, held: de >= 0 && de < 0.2 ? null : held, lm: L.lm, lmW: L.w, lmH: L.h, nightVision, time: W.time, sprites,
+      dyn: (M) => dynWorld(M, W, me),
+      vm: showHands ? (M, g, cam) => viewModel(M, W, me, sel, dev, bob, cam) : null,
+      over: null, fx
+    });
+    // overlays drawn after the scene was composed are shown next frame; draw the persistent ones now
+    if (!me.dead && dev.temp < 0) { breathT += dt; const ph = breathT % 3.2; if (ph < 1.1) { const a = Math.sin(ph / 1.1 * Math.PI); for (let k = 0; k < 160; k++) { const x = GH.W / 2 + (Math.random() - 0.5) * 90 * a, y = GH.H - 38 - Math.random() * 50 * a; if (Math.random() < a * 0.5) R.put(x | 0, y | 0, 200, 205, 215); } } }
+    if (de >= 0) {
+      fx.black = de < 0.2 ? 0.92 : de > 1.45 && de < 2.2 ? (de - 1.45) / 0.75 : de >= 2.2 ? Math.max(0, 1 - (de - 2.2) / 0.7) : 0;
+      if (de >= 0.2 && de < 1.55) {
+        const T = GH.SPR['jf_' + jumpForm] || GH.SPR.jf_shadow;
+        const f = Math.min(1, (de - 0.2) / 0.35);
+        const scl = Math.round(2 + f * 5 + Math.max(0, de - 0.55) * 1.5);
+        const shake = 12 * f;
+        R.blitTex(T, (GH.W / 2 - T.w * scl / 2 + (Math.random() - 0.5) * shake) | 0, (GH.H / 2 - T.h * scl / 2 + 10 + (Math.random() - 0.5) * shake) | 0, scl, null, 1.3);
+        fx.glitch = 0.9 + Math.random() * 0.6; fx.redPulse = 0.6 + 0.4 * Math.sin(de * 40); fx.fear = 1;
+        if (de < 0.3) fx.flash = 0.5;
+      }
+    }
+    if (nightVision) { R.text('REC', 14, 12, 255, 40, 40, 2); for (const [x, y] of [[10, 10], [GH.W - 26, 10], [10, GH.H - 26], [GH.W - 26, GH.H - 26]]) { R.rect(x, y, 16, 2, 200, 255, 200); R.rect(x, y, 2, 16, 200, 255, 200); } }
+    if (lensUse && sel.it === 'mirror') drawMirror(W, me, dev, lensEv);
+    // second pass: re-run post with the overlay (cheap — scene is cached in the framebuffer)
+    G3.post(R.bytes(), fx, W.time);
+  }
+
+  function viewModel(M, W, me, sel, dev, bob, cam) {
+    const { eye, f, right, up } = cam;
+    const B = [[-right[0], -right[1], -right[2]], up, [-f[0], -f[1], -f[2]]]; // devices face the player
+    const BL = [right, up, f]; // lights point forward
+    const by = Math.abs(bob) * 1.2, sx = Math.sin(bobT * 0.5) * 0.008;
+    const at = (r, u, d) => [eye[0] + right[0] * r + up[0] * u + f[0] * d, eye[1] + right[1] * r + up[1] * u + f[1] * d, eye[2] + right[2] * r + up[2] * u + f[2] * d];
+    // light source in the left hand
+    if (me.light) {
+      if (W.era === 'modern') G3.item(M, 'flashlight', at(-0.2 + sx, -0.2 - by, 0.42), BL, 1.0, { on: lightFail <= 0 });
+      else G3.item(M, 'torch', at(-0.36 + sx, -0.56 - by, 0.6), BL, 0.95, { on: lightFail <= 0, flick: 0.85 + Math.random() * 0.3 });
+    }
+    if (!sel) return;
+    const it = sel.it;
+    const pos = at(0.19 - sx, -0.21 - by, 0.5);
+    const st = { on: sel.on, level: dev.emf, written: false };
+    if (it === 'candle') { st.blue = dev.emf >= 5 && (W.ghostPub.ev.includes('emf') || W.ghostPub.fake === 'emf'); st.wild = dev.emf >= 2; }
+    if (it === 'bowl') st.frozen = dev.temp < 0;
+    if (it === 'thread' || it === 'motion') st.on = 0;
+    const SC = 0.85;
+    G3.item(M, it, pos, B, SC, st);
+    // readouts drawn in pixels on top of the device screen
+    const scr = (lx, ly, lz) => G3.project([pos[0] + (B[0][0] * lx + up[0] * ly + B[2][0] * lz) * SC, pos[1] + (B[0][1] * lx + up[1] * ly + B[2][1] * lz) * SC, pos[2] + (B[0][2] * lx + up[2] * ly + B[2][2] * lz) * SC]);
+    if (it === 'thermo') { const p = scr(0, 0.08, 0.02); if (p) { const s = (dev.temp + (Math.random() - 0.5) * 0.3).toFixed(1); R.text(s, (p[0] - s.length * 4) | 0, (p[1] - 5) | 0, 120, 255, 160, 2); } }
+    if (it === 'spiritbox' && sel.on) { const p = scr(0, 0.07, 0.02); if (p) { const s = String((Math.random() * 99) | 0).padStart(2, '0') + '.' + ((Math.random() * 9) | 0); R.text(s, (p[0] - 16) | 0, (p[1] - 5) | 0, 255, 70, 60, 2); } }
+  }
+
   // ---------------- tutorial ----------------
   function tutorial(W, me, dt) {
     tutT += dt;
@@ -743,6 +906,13 @@
     bdA += dt * 0.12;
     const flick = Math.random() < 0.02 ? 0 : 1;
     R.buildLightmap(W.map, W.time, [], false);
+    if (G3) {
+      const held = W.era === 'modern' ? { pow: 1.7 * flick, col: [1, 0.96, 0.86], cone: true, k: 0.05 } : { pow: 1.1 * flick, col: [1, 0.62, 0.3], cone: false, k: 0.2 };
+      const sprites = Math.sin(W.time * 0.7) > 0.93 ? [{ x: W.cam.x + Math.cos(bdA) * 3, z: W.cam.y + Math.sin(bdA) * 3, h: 1.85, name: 'g_shadow', alpha: 0.75, glitch: 0.6, mode: 'ghost' }] : [];
+      R.clearTransparent(); const L = R.getLM();
+      G3.render({ map: W.map, x: W.cam.x, y: W.cam.y, a: bdA, pitch: 0.05, eye: GH.EYE, held, lm: L.lm, lmW: L.w, lmH: L.h, time: W.time, sprites, dyn: (M) => dynWorld(M, W, null), over: R.bytes(), fx: { fear: 0.6, glitch: Math.random() < 0.01 ? 0.6 : 0 } });
+      return;
+    }
     const spr = [];
     for (const o of W.objs) { if (!o || o.kind === 'gone') continue; let n = o.spr; if (o.kind === 'lamp') { const L = W.map.lights[o.light]; n = L && L.kind === 'torch' ? (L.on ? 'walltorch' : 'walltorchoff') : (L && L.on ? 'bulb' : 'bulboff'); } const tex = GH.SPR[n]; if (tex) spr.push({ x: o.x, y: o.y, tex, sh: o.sh || 0.6, z: o.z || 0 }); }
     if (Math.sin(W.time * 0.7) > 0.93) spr.push({ x: W.cam.x + Math.cos(bdA) * 3, y: W.cam.y + Math.sin(bdA) * 3, tex: GH.SPR.g_shadow, sh: 0.98, alpha: 0.7, glitch: 0.6, ghost: true });

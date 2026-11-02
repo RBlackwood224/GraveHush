@@ -1,7 +1,7 @@
 // GRAVEHUSH — Doom-style raycaster with dithered dynamic lighting
 'use strict';
 
-GH.W = 384; GH.H = 216;
+GH.W = 480; GH.H = 270;
 
 GH.Renderer = function (canvas) {
   const W = GH.W, H = GH.H;
@@ -57,7 +57,7 @@ GH.Renderer = function (canvas) {
     const out = map.outdoor;
     for (let i = 0; i < N; i++) {
       const j = i * 3;
-      if (out[i]) { lm[j] = 0.07; lm[j + 1] = 0.08; lm[j + 2] = 0.13; } else { lm[j] = 0.012; lm[j + 1] = 0.012; lm[j + 2] = 0.016; }
+      if (out[i]) { lm[j] = 0.17; lm[j + 1] = 0.19; lm[j + 2] = 0.29; } else { lm[j] = 0.012; lm[j + 1] = 0.012; lm[j + 2] = 0.016; }
     }
     for (const L of map.lights) {
       if (!L.on || L.broken) continue;
@@ -322,5 +322,8 @@ GH.Renderer = function (canvas) {
   };
 
   this.present = function () { ctx.putImageData(img, 0, 0); };
+  this.clearTransparent = function () { buf.fill(0); };
+  this.bytes = function () { return new Uint8Array(img.data.buffer); };
+  this.getLM = function () { return { lm, w: LW, h: LH }; };
   this.clear = function () { buf.fill(0xff000000); };
 };

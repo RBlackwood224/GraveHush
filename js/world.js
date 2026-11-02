@@ -341,5 +341,6 @@ GH.applyMod = function (W, m) {
     if (di >= 0) { map.doors[di].dead = true; map.doors[di].open = 0; map.doors[di].target = 0; map.doors[di].locked = 1e9; }
     map.doorAt[i] = -1; map.cells[i] = cell;
   }
+  map._ver = (map._ver || 0) + 1;
   GH.precomputeLights(map);
 };
