@@ -2,6 +2,8 @@
 
 **They are listening.**
 
+### ▶ [PLAY NOW](https://rblackwood224.github.io/GraveHush/)
+
 A first-person pixel-art ghost hunting horror game in the browser. Solo or online co-op for up to 4 players, with proximity voice chat. The ghost hears your microphone.
 
 ![Modern](screenshots/modern.png)
@@ -11,7 +13,9 @@ A first-person pixel-art ghost hunting horror game in the browser. Solo or onlin
 
 ## Play
 
-Open `index.html` through GitHub Pages (or any web server). No install needed.
+**[https://rblackwood224.github.io/GraveHush/](https://rblackwood224.github.io/GraveHush/)**
+
+Runs in the browser on PC, phone and tablet. No install needed.
 
 ## How to play
 
